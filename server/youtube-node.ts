@@ -8,8 +8,23 @@ type YtdlFormat = YtdlVideoInfo['formats'][number];
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const YT_COOKIE = process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '';
 
 const INFO_OPTS = { playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[] };
+
+function buildRequestHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'user-agent': UA,
+    referer: 'https://www.youtube.com/',
+  };
+  if (YT_COOKIE.trim()) headers.cookie = YT_COOKIE.trim();
+  return headers;
+}
+
+function ffmpegInputHeadersArg(): string | null {
+  if (!YT_COOKIE.trim()) return null;
+  return `Cookie: ${YT_COOKIE.trim()}\r\n`;
+}
 
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '';
@@ -42,7 +57,10 @@ export async function getYoutubeInfo(url: string): Promise<{
     format_type: 'video+audio' | 'video-only' | 'audio-only';
   }>;
 }> {
-  const info = await ytdl.getInfo(url, INFO_OPTS);
+  const info = await ytdl.getInfo(url, {
+    ...INFO_OPTS,
+    requestOptions: { headers: buildRequestHeaders() },
+  });
   const d = info.videoDetails;
   const formats = info.formats;
 
@@ -139,6 +157,9 @@ function spawnFfmpegMerge(videoUrl: string, audioUrl: string): {
   stdout: Readable;
 } {
   const ff = ffmpegPath || 'ffmpeg';
+  const cookieHeaders = ffmpegInputHeadersArg();
+  const inputOneHeaders = cookieHeaders ? ['-headers', cookieHeaders] : [];
+  const inputTwoHeaders = cookieHeaders ? ['-headers', cookieHeaders] : [];
   const proc = spawn(
     ff,
     [
@@ -150,12 +171,14 @@ function spawnFfmpegMerge(videoUrl: string, audioUrl: string): {
       UA,
       '-referer',
       'https://www.youtube.com/',
+      ...inputOneHeaders,
       '-i',
       videoUrl,
       '-user_agent',
       UA,
       '-referer',
       'https://www.youtube.com/',
+      ...inputTwoHeaders,
       '-i',
       audioUrl,
       '-map',
@@ -194,7 +217,7 @@ export function startYoutubeDownload(info: YtdlVideoInfo, formatId: string, kind
     const stream = ytdl.downloadFromInfo(info, {
       quality: 'highestaudio',
       filter: 'audioonly',
-      requestOptions: { headers: { 'user-agent': UA, referer: 'https://www.youtube.com/' } },
+      requestOptions: { headers: buildRequestHeaders() },
     });
     return {
       stream,
@@ -211,7 +234,7 @@ export function startYoutubeDownload(info: YtdlVideoInfo, formatId: string, kind
     if (prog) {
       const stream = ytdl.downloadFromInfo(info, {
         format: prog,
-        requestOptions: { headers: { 'user-agent': UA, referer: 'https://www.youtube.com/' } },
+        requestOptions: { headers: buildRequestHeaders() },
       });
       return {
         stream,
@@ -245,7 +268,7 @@ export function startYoutubeDownload(info: YtdlVideoInfo, formatId: string, kind
     if (prog) {
       const stream = ytdl.downloadFromInfo(info, {
         format: prog,
-        requestOptions: { headers: { 'user-agent': UA, referer: 'https://www.youtube.com/' } },
+        requestOptions: { headers: buildRequestHeaders() },
       });
       return { stream, kill: () => stream.destroy() };
     }
@@ -277,7 +300,7 @@ export function startYoutubeDownload(info: YtdlVideoInfo, formatId: string, kind
   if (fmt.hasVideo && fmt.hasAudio) {
     const stream = ytdl.downloadFromInfo(info, {
       format: fmt,
-      requestOptions: { headers: { 'user-agent': UA, referer: 'https://www.youtube.com/' } },
+      requestOptions: { headers: buildRequestHeaders() },
     });
     return { stream, kill: () => stream.destroy() };
   }

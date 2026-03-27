@@ -9,7 +9,19 @@ import morgan from 'morgan';
 import ytdl from '@distube/ytdl-core';
 import { getYoutubeInfo, startYoutubeDownload } from './youtube-node.js';
 
-const YTDL_INFO_OPTS = { playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[] };
+const YTDL_INFO_OPTS = {
+  playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[],
+  requestOptions: {
+    headers: {
+      'user-agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      referer: 'https://www.youtube.com/',
+      ...(process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE
+        ? { cookie: (process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '').trim() }
+        : {}),
+    },
+  },
+};
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -195,6 +207,7 @@ export function createApp(): express.Express {
       env: NODE_ENV,
       youtubeEngine: 'ytdl-core',
       ytdlCoreVersion: ytdl.version,
+      hasYoutubeCookie: Boolean((process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '').trim()),
       timestamp: new Date().toISOString(),
     });
   });

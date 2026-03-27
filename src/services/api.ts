@@ -40,8 +40,13 @@ const api = axios.create({
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   const axiosError = error as AxiosError<{ error?: string }>;
-  const fromResponse = axiosError.response?.data?.error;
-  if (fromResponse) return fromResponse;
+  const responseData = axiosError.response?.data as unknown;
+  if (typeof responseData === 'string' && responseData.trim()) return responseData;
+  if (responseData && typeof responseData === 'object') {
+    const dataObj = responseData as { error?: unknown; message?: unknown };
+    if (typeof dataObj.error === 'string' && dataObj.error.trim()) return dataObj.error;
+    if (typeof dataObj.message === 'string' && dataObj.message.trim()) return dataObj.message;
+  }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
   if (axiosError.message) return axiosError.message;
   return fallback;

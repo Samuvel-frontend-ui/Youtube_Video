@@ -4,20 +4,24 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
+      "src": "/api/(.*)",
+      "dest": "/api?__path=$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "functions": {
-    "api/index.ts": {
+  
+    "api/*.ts": {
       "maxDuration": 60,
-      "memory": 3008,
+      "memory": 2048,
       "includeFiles": "node_modules/{youtube-dl-exec/bin,ffmpeg-static}/**"
     }
   },

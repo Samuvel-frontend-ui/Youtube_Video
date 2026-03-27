@@ -1,6 +1,4 @@
-import { existsSync } from 'fs';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
-import { createRequire } from 'module';
 import compression from 'compression';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -8,10 +6,10 @@ import ffmpegPath from 'ffmpeg-static';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import youtubedl from 'youtube-dl-exec';
+import ytdl from '@distube/ytdl-core';
+import { getYoutubeInfo, startYoutubeDownload } from './youtube-node.js';
 
-const nodeRequire = createRequire(import.meta.url);
-const { YOUTUBE_DL_PATH } = nodeRequire('youtube-dl-exec/src/constants.js') as { YOUTUBE_DL_PATH: string };
+const YTDL_INFO_OPTS = { playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[] };
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -43,14 +41,6 @@ function parseDownloadKind(q: unknown): 'video' | 'mp3' {
   if (typeof q === 'string' && q.toLowerCase() === 'mp3') return 'mp3';
   if (Array.isArray(q) && typeof q[0] === 'string' && q[0].toLowerCase() === 'mp3') return 'mp3';
   return 'video';
-}
-
-function parseQualityPreset(formatId: string): number | null {
-  const m = /^q-(\d{3,4})p$/i.exec(formatId.trim());
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n) || n < 144 || n > 2160) return null;
-  return n;
 }
 
 function isHttpUrl(url: string): boolean {
@@ -203,7 +193,8 @@ export function createApp(): express.Express {
     res.json({
       ok: true,
       env: NODE_ENV,
-      hasYtDlpBinary: existsSync(YOUTUBE_DL_PATH),
+      youtubeEngine: 'ytdl-core',
+      ytdlCoreVersion: ytdl.version,
       timestamp: new Date().toISOString(),
     });
   });
@@ -213,6 +204,9 @@ export function createApp(): express.Express {
       const url = normalizeVideoUrl(String(req.body?.url || ''));
       if (!url) return res.status(400).json({ error: 'URL is required' });
       if (!isHttpUrl(url)) return res.status(400).json({ error: 'URL must be a valid http(s) link.' });
+      if (!ytdl.validateURL(url)) {
+        return res.status(400).json({ error: 'Only YouTube links are supported.' });
+      }
 
       cleanupVideoInfoCache();
       const cached = videoInfoCache.get(url);
@@ -220,89 +214,7 @@ export function createApp(): express.Express {
         return res.json(cached.payload);
       }
 
-      const data: unknown = await withRetry(
-        () =>
-          youtubedl(url, {
-            dumpSingleJson: true,
-            noCheckCertificates: true,
-            noWarnings: true,
-            noPlaylist: true,
-            addHeader: [
-              'referer:https://www.youtube.com/',
-              'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            ],
-            extractorArgs: 'youtube:player_client=android,web',
-          } as Parameters<typeof youtubedl>[1]),
-        2
-      );
-
-      const d = data as {
-        id?: string;
-        title?: string;
-        thumbnail?: string;
-        duration?: number;
-        duration_string?: string;
-        uploader?: string;
-        formats?: Array<Record<string, unknown>>;
-      };
-
-      const videoFormats = (d.formats || [])
-        .filter((f) => f.vcodec !== 'none')
-        .filter((f) => {
-          const protocol = String(f.protocol || '').toLowerCase();
-          // Skip adaptive/live playlist protocols that often fail in direct download mode.
-          return !protocol.includes('m3u8');
-        })
-        .filter((f) => {
-          const ext = String(f.ext || '').toLowerCase();
-          // Keep common downloadable containers only.
-          return ext === 'mp4' || ext === 'webm';
-        })
-        .map((f) => ({
-          format_id: String(f.format_id || ''),
-          ext: String(f.ext || 'mp4'),
-          resolution: String(f.resolution || ''),
-          filesize: typeof f.filesize === 'number' ? f.filesize : undefined,
-          quality: String(f.format_note || (f.height != null ? `${f.height}p` : f.resolution || 'Unknown')),
-          format_type: f.acodec === 'none' ? 'video-only' : 'video+audio',
-          height: typeof f.height === 'number' ? f.height : 0,
-        }))
-        .filter((f) => f.format_id && f.quality)
-        .sort((a, b) => b.height - a.height || a.format_id.localeCompare(b.format_id));
-
-      const maxHeight = videoFormats.reduce((max, f) => (f.height > max ? f.height : max), 0);
-      const presetHeights = [360, 480, 720, 1080].filter((h) => h <= Math.max(maxHeight, 360));
-      const presetFormats = presetHeights.map((h) => ({
-        format_id: `q-${h}p`,
-        ext: 'mp4',
-        resolution: `${h}p`,
-        filesize: undefined,
-        quality: `${h}p (recommended)`,
-        format_type: 'video+audio' as const,
-      }));
-
-      const formats = [
-        {
-          format_id: 'mp3',
-          ext: 'mp3',
-          resolution: 'audio',
-          filesize: undefined,
-          quality: 'MP3 (audio only)',
-          format_type: 'audio-only',
-        },
-        ...presetFormats,
-        ...videoFormats.map(({ height: _height, ...rest }) => rest),
-      ];
-
-      const payload = {
-        id: String(d.id || ''),
-        title: String(d.title || 'Untitled'),
-        thumbnail: String(d.thumbnail || ''),
-        duration: Number(d.duration || 0),
-        duration_string: String(d.duration_string || ''),
-        uploader: String(d.uploader || 'Unknown'),
-        formats,
-      };
+      const payload = await withRetry(() => getYoutubeInfo(url), 2);
 
       videoInfoCache.set(url, {
         expiresAt: Date.now() + VIDEO_INFO_CACHE_TTL_MS,
@@ -310,9 +222,6 @@ export function createApp(): express.Express {
       });
       return res.json(payload);
     } catch (error) {
-      if (!existsSync(YOUTUBE_DL_PATH)) {
-        logErr('yt-dlp binary missing at:', YOUTUBE_DL_PATH);
-      }
       const message = normalizeErrorMessage(error, 'Failed to fetch video info.');
       logErr('video-info failed:', message);
       return res.status(500).json({ error: message });
@@ -329,63 +238,38 @@ export function createApp(): express.Express {
     const requestId = typeof req.query.request_id === 'string' ? req.query.request_id : '';
     const downloadKind = parseDownloadKind(req.query.kind);
     const isMp3 = fmtId.toLowerCase() === 'mp3' || downloadKind === 'mp3';
-    const presetHeight = parseQualityPreset(fmtId);
-    const formatSpec = presetHeight
-      ? `bestvideo[height<=${presetHeight}]+bestaudio/best[height<=${presetHeight}]/best`
-      : fmtId === 'best'
-        ? 'bestvideo+bestaudio/best'
-        : `${fmtId}+bestaudio/${fmtId}/best`;
-
-    const ytDlFlags: Record<string, unknown> = {
-      output: '-',
-      noPlaylist: true,
-      noCheckCertificates: true,
-      noWarnings: true,
-      quiet: false,
-      newline: true,
-      addHeader: [
-        'referer:https://www.youtube.com/',
-        'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      ],
-      extractorArgs: 'youtube:player_client=android,web',
-    };
-
-    if (isMp3) {
-      ytDlFlags.format = 'bestaudio/best';
-    } else {
-      ytDlFlags.format = formatSpec;
-      ytDlFlags.mergeOutputFormat = 'mp4';
-    }
 
     try {
+      if (!ytdl.validateURL(url)) {
+        return res.status(400).json({ error: 'Only YouTube links are supported.' });
+      }
       if (requestId) {
         downloadProgress.set(requestId, { state: 'preparing', updatedAt: Date.now() });
       }
-      const subprocess = youtubedl.exec(url, ytDlFlags as Parameters<typeof youtubedl.exec>[1]);
-      // tinyspawn treats non-zero / killed children as promise rejection; consume it
-      // so intentional kills (client disconnect, ffmpeg spawn failure) do not crash Node.
-      void (subprocess as unknown as Promise<unknown>).catch(() => undefined);
-      const stdout = subprocess.stdout;
 
-      if (!stdout) {
-        return res.status(500).json({ error: 'Download backend could not start stream.' });
+      const info = await withRetry(() => ytdl.getInfo(url, YTDL_INFO_OPTS), 2);
+
+      let handle;
+      try {
+        handle = startYoutubeDownload(info, fmtId, downloadKind);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Download failed.';
+        return res.status(400).json({ error: msg });
       }
 
-      let ffmpegProc: ChildProcessWithoutNullStreams | null = null;
-      let outputStream = stdout;
+      const inputStream = handle.stream;
+      let ffmpegMp3: ChildProcessWithoutNullStreams | null = null;
+      let outputStream = inputStream;
 
-      // yt-dlp does not reliably produce MP3 when writing to stdout directly.
-      // For MP3 requests we transcode the audio stream with ffmpeg explicitly.
       if (isMp3) {
         const ffmpegExec = ffmpegPath || 'ffmpeg';
-        ffmpegProc = spawn(
+        ffmpegMp3 = spawn(
           ffmpegExec,
           ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-acodec', 'libmp3lame', '-q:a', '2', '-f', 'mp3', 'pipe:1'],
           { stdio: ['pipe', 'pipe', 'pipe'] }
         );
-
-        stdout.pipe(ffmpegProc.stdin);
-        outputStream = ffmpegProc.stdout;
+        inputStream.pipe(ffmpegMp3.stdin);
+        outputStream = ffmpegMp3.stdout;
       }
 
       const titlePart = sanitizeFilenamePart(typeof req.query.title === 'string' ? req.query.title : '', 'vibedown');
@@ -396,17 +280,11 @@ export function createApp(): express.Express {
       const encodedFile = `${encodeURIComponent(`${titlePart}-${fileLabel}.${outputExt}`)}`;
 
       const killProc = () => {
+        handle.kill();
         try {
-          subprocess.kill('SIGKILL');
+          ffmpegMp3?.kill('SIGKILL');
         } catch {
           /* ignore */
-        }
-        if (ffmpegProc) {
-          try {
-            ffmpegProc.kill('SIGKILL');
-          } catch {
-            /* ignore */
-          }
         }
       };
 
@@ -422,7 +300,7 @@ export function createApp(): express.Express {
 
       res.once('close', killProc);
 
-      subprocess.stderr?.on('data', (chunk: Buffer) => {
+      const onFfmpegStderr = (chunk: Buffer) => {
         const line = chunk.toString();
         if (requestId) {
           const parsed = parseProgressLine(line);
@@ -436,13 +314,27 @@ export function createApp(): express.Express {
             });
           }
         }
-        if (!line.includes('ETA') && !line.includes('%')) {
-          logErr('yt-dlp stderr:', line.trim());
+        if (line.trim()) logErr('ffmpeg stderr:', line.trim());
+      };
+
+      handle.ffmpegProc?.stderr?.on('data', onFfmpegStderr);
+      ffmpegMp3?.stderr.on('data', onFfmpegStderr);
+
+      const onDrain = () => outputStream.resume();
+      res.on('drain', onDrain);
+
+      inputStream.on('error', (err: Error) => {
+        res.removeListener('drain', onDrain);
+        if (!streamStarted) {
+          if (requestId) {
+            downloadProgress.set(requestId, {
+              state: 'failed',
+              error: err.message || 'Download stream failed',
+              updatedAt: Date.now(),
+            });
+          }
+          sendJsonError(err.message || 'Download stream failed');
         }
-      });
-      ffmpegProc?.stderr.on('data', (chunk: Buffer) => {
-        const line = chunk.toString().trim();
-        if (line) logErr('ffmpeg stderr:', line);
       });
 
       const beginBody = () => {
@@ -465,9 +357,6 @@ export function createApp(): express.Express {
         const ok = res.write(chunk);
         if (!ok) outputStream.pause();
       });
-
-      const onDrain = () => outputStream.resume();
-      res.on('drain', onDrain);
 
       outputStream.on('end', () => {
         res.removeListener('drain', onDrain);
@@ -499,19 +388,7 @@ export function createApp(): express.Express {
         }
       });
 
-      subprocess.on('error', (err: Error) => {
-        res.removeListener('close', killProc);
-        res.removeListener('drain', onDrain);
-        sendJsonError(err.message || 'Failed to spawn yt-dlp');
-        if (requestId) {
-          downloadProgress.set(requestId, {
-            state: 'failed',
-            error: err.message || 'Failed to spawn yt-dlp',
-            updatedAt: Date.now(),
-          });
-        }
-      });
-      ffmpegProc?.on('error', (err: NodeJS.ErrnoException) => {
+      ffmpegMp3?.on('error', (err: NodeJS.ErrnoException) => {
         res.removeListener('close', killProc);
         res.removeListener('drain', onDrain);
         if (err.code === 'ENOENT') {
@@ -528,39 +405,36 @@ export function createApp(): express.Express {
         sendJsonError(err.message || 'Failed to spawn ffmpeg');
       });
 
-      subprocess.on('close', (code: number | null) => {
-        res.removeListener('close', killProc);
+      handle.ffmpegProc?.on('error', (err: Error) => {
         res.removeListener('drain', onDrain);
+        sendJsonError(err.message || 'Video merge failed to start.');
+      });
 
-        if (!streamStarted) {
-          if (responseSettled) return;
-          if (code !== 0 && code !== null) {
-            if (requestId) {
-              downloadProgress.set(requestId, {
-                state: 'failed',
-                error: 'Download failed',
-                updatedAt: Date.now(),
-              });
-            }
-            sendJsonError(
-              'Download failed. Install ffmpeg from ffmpeg.org and add it to PATH. Restricted videos may require cookies.'
-            );
-          } else {
-            sendJsonError('No video data was returned by yt-dlp.');
-          }
-          return;
-        }
-
-        if (code !== 0 && code !== null && !res.writableEnded) {
-          responseSettled = true;
+      handle.ffmpegProc?.on('close', (code: number | null) => {
+        res.removeListener('drain', onDrain);
+        if (!streamStarted && code !== 0 && code !== null) {
           if (requestId) {
             downloadProgress.set(requestId, {
               state: 'failed',
-              error: 'Download failed',
+              error: 'Video merge failed',
               updatedAt: Date.now(),
             });
           }
-          res.destroy();
+          sendJsonError('Video merge failed. Try another quality or format.');
+        }
+      });
+
+      ffmpegMp3?.on('close', (code: number | null) => {
+        res.removeListener('drain', onDrain);
+        if (!streamStarted && code !== 0 && code !== null) {
+          if (requestId) {
+            downloadProgress.set(requestId, {
+              state: 'failed',
+              error: 'MP3 conversion failed',
+              updatedAt: Date.now(),
+            });
+          }
+          sendJsonError('MP3 conversion failed.');
         }
       });
     } catch (error) {

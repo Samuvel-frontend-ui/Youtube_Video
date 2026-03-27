@@ -14,7 +14,7 @@
     "api/*.ts": {
       "maxDuration": 60,
       "memory": 2048,
-      "includeFiles": "node_modules/{youtube-dl-exec/bin,ffmpeg-static}/**"
+      "includeFiles": "node_modules/ffmpeg-static/**"
     }
   },
   "headers": [

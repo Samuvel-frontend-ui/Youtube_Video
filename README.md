@@ -1,33 +1,10 @@
 # VibeDown
 
-YouTube downloader: React + Vite frontend, Python + yt-dlp API (`backend-python/`).
+This repository has **two top-level folders only**:
 
-## Local development
+- **`frontend/`** — Vite + React app (see **`frontend/README.md`**).
+- **`backend/`** — FastAPI + yt-dlp API (see **`backend/README.md`**).
 
-1. `npm install`
-2. `pip install -r backend-python/requirements.txt` (Python 3.11+, [ffmpeg](https://ffmpeg.org/) on `PATH`)
-3. `npm run dev` — Vite (port 3000) and uvicorn (port 8000)
+**`.gitignore`** files live only inside **`frontend/.gitignore`** and **`backend/.gitignore`** (nothing at the repo root).
 
-Optional: copy `.env.example` to `.env` and set `VITE_BACKEND_URL` if the API is not on `127.0.0.1:8000`.
-
-## Deploy
-
-- **Frontend:** Vercel (static build). Set `VITE_API_URL` to your API origin (no trailing slash).
-- **API:** Render (Docker) or any host with ffmpeg — see `backend-python/README.md`.
-
-## What this project is (full picture)
-
-| Piece | Role |
-|--------|------|
-| `src/` | React 19 + Vite 6 + Tailwind 4 UI: search, format list, download trigger, history, legal/static pages |
-| `src/services/api.ts` | Axios client: `VITE_API_URL` for production off-origin API, else same-origin `/api` (Vite proxy in dev) |
-| `vite.config.ts` | Proxies `/api` → `VITE_BACKEND_URL` or `http://127.0.0.1:8000`, long timeouts for slow `video-info` |
-| `vercel.json` | SPA rewrite to `index.html`, long cache for `/assets/*` |
-| `backend-python/main.py` | FastAPI: `/api/health`, `/api/video-info`, `/api/download`, `/api/download-status`; yt-dlp + temp files + optional `YOUTUBE_COOKIE` |
-| `backend-python/Dockerfile` | Python + ffmpeg image for Render etc. |
-
-**Honest scope:** only **YouTube** URLs (watch, Shorts, youtu.be, nocookie, music subdomain). Not “any site” — the old marketing line was removed on purpose.
-
-**Why split frontend and API:** Vercel serverless is a poor fit for long yt-dlp jobs and ffmpeg merges. The UI ships as static files; the API runs on a container/VPS with ffmpeg.
-
-**Env you actually use:** see `.env.example` (`VITE_API_URL`, `VITE_BACKEND_URL`, `FRONTEND_ORIGIN`, `YOUTUBE_COOKIE` on the API).
+If an old **`backend-python/`** folder appears, delete it manually — the API is **`backend/`** only.

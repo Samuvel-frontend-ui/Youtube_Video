@@ -1,0 +1,22 @@
+# Dependencies & build
+node_modules/
+dist/
+.vite/
+
+# Env (keep template)
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+
+# Test / coverage
+coverage/
+
+# Vercel CLI link (local)
+.vercel
+
+# Scratch
+.tmp*.json

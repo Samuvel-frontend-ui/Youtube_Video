@@ -7,6 +7,6 @@ This repository has **two top-level folders only**:
 
 **`.gitignore`:** root only ignores hoisted **`node_modules/`** (npm workspaces). **`frontend/.gitignore`** and **`backend/.gitignore`** cover each app.
 
-**Vercel:** root **`package.json`** (workspace) + **`vercel.json`** build **`frontend/`** → **`frontend/dist`**. Production API URL is hardcoded in **`frontend/src/services/api.ts`** (`REMOTE_API_ORIGIN`), not env vars.
+**Vercel:** root **`package.json`** (workspace) + **`vercel.json`** build **`frontend/`** → **`frontend/dist`**. Production API URL is hardcoded in **`frontend/src/services/api.ts`** (`API_BASE_URL`), not env vars.
 
 If an old **`backend-python/`** folder appears, delete it manually — the API is **`backend/`** only.

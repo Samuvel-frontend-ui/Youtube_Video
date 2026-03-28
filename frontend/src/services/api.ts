@@ -1,24 +1,18 @@
 import axios, { AxiosError } from 'axios';
 
 /**
- * Hardcoded API (no env). Change REMOTE_API_ORIGIN if you move the backend.
- *
- * Use `/api` only on localhost so Vite can proxy to uvicorn. On any real host (e.g. *.vercel.app)
- * we must use the full Render URL — otherwise POST /api hits the static CDN → HTTP 405.
+ * Always use this full base URL (no env, no `/api` on Vercel — that causes POST → 405 on static hosting).
+ * For local backend testing, temporarily set to `http://127.0.0.1:8000/api` (and allow CORS on the API).
  */
-const REMOTE_API_ORIGIN = 'https://yt-backend-ys8d.onrender.com';
-const REMOTE_API_BASE = `${REMOTE_API_ORIGIN.replace(/\/$/, '')}/api`;
+const API_BASE_URL = 'https://yt-backend-ys8d.onrender.com/api';
 
-const apiBase: string = (() => {
-  if (typeof window !== 'undefined') {
-    const h = window.location.hostname;
-    if (h && h !== 'localhost' && h !== '127.0.0.1') {
-      return REMOTE_API_BASE;
-    }
-  }
-  if (import.meta.env.DEV) return '/api';
-  return REMOTE_API_BASE;
-})();
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 120_000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export interface VideoFormat {
   format_id: string;
@@ -47,14 +41,6 @@ export interface DownloadProgress {
   error?: string;
 }
 
-const api = axios.create({
-  baseURL: apiBase,
-  timeout: 120_000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
 function getApiErrorMessage(error: unknown, fallback: string): string {
   const axiosError = error as AxiosError<{ error?: string }>;
   const responseData = axiosError.response?.data as unknown;
@@ -67,12 +53,12 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   }
   if (axiosError.response?.status === 405) {
     return (
-      'HTTP 405: request hit the wrong host. Check REMOTE_API_ORIGIN in frontend/src/services/api.ts matches your API.'
+      'HTTP 405: still posting to the wrong host. Ensure API_BASE_URL in frontend/src/services/api.ts is your Render URL + /api.'
     );
   }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
   if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNREFUSED')
-    return 'Cannot reach the API. For local dev run the backend on port 8000 and use npm run dev; for production check REMOTE_API_ORIGIN in api.ts.';
+    return 'Cannot reach the API. Check that the Render service is up and API_BASE_URL in api.ts is correct.';
   if (axiosError.code === 'ECONNRESET' || /ECONNRESET/i.test(String(axiosError.message)))
     return 'Connection was reset while talking to the API. Retry or wait if the API was cold-starting.';
   if (axiosError.message) return axiosError.message;
@@ -107,7 +93,7 @@ export const videoService = {
     if (opts?.title?.trim()) params.set('title', opts.title.trim());
     if (opts?.kind) params.set('kind', opts.kind);
     if (opts?.requestId) params.set('request_id', opts.requestId);
-    return `${apiBase}/download?${params.toString()}`;
+    return `${API_BASE_URL}/download?${params.toString()}`;
   },
 
   async fetchDownloadStatus(requestId: string): Promise<DownloadProgress> {

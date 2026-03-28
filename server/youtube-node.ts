@@ -8,22 +8,78 @@ type YtdlFormat = YtdlVideoInfo['formats'][number];
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const YT_COOKIE = process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '';
 
-const INFO_OPTS = { playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[] };
+/**
+ * Optional YouTube `Cookie` header for bot-gated videos.
+ * Do NOT commit real session values to a public repo (anyone can hijack the account).
+ * For production, prefer a private fork or a backend you control.
+ */
+const INLINE_YOUTUBE_COOKIE = '';
+
+type PlayerClient = 'WEB_EMBEDDED' | 'TV' | 'IOS' | 'ANDROID' | 'WEB';
+
+const PLAYER_CLIENT_FALLBACKS: PlayerClient[][] = [
+  ['ANDROID', 'WEB'],
+  ['WEB', 'ANDROID'],
+  ['IOS', 'WEB'],
+  ['TV', 'WEB'],
+  ['WEB_EMBEDDED', 'WEB'],
+  ['ANDROID'],
+  ['IOS'],
+  ['TV'],
+  ['WEB'],
+];
 
 function buildRequestHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'user-agent': UA,
     referer: 'https://www.youtube.com/',
+    'accept-language': 'en-US,en;q=0.9',
   };
-  if (YT_COOKIE.trim()) headers.cookie = YT_COOKIE.trim();
+  if (INLINE_YOUTUBE_COOKIE.trim()) headers.cookie = INLINE_YOUTUBE_COOKIE.trim();
   return headers;
 }
 
+export function isYoutubeCookieInlineConfigured(): boolean {
+  return INLINE_YOUTUBE_COOKIE.trim().length > 0;
+}
+
 function ffmpegInputHeadersArg(): string | null {
-  if (!YT_COOKIE.trim()) return null;
-  return `Cookie: ${YT_COOKIE.trim()}\r\n`;
+  if (!INLINE_YOUTUBE_COOKIE.trim()) return null;
+  return `Cookie: ${INLINE_YOUTUBE_COOKIE.trim()}\r\n`;
+}
+
+/** YouTube often returns these for server/datacenter IPs; try the next player client before giving up. */
+function shouldRetryWithNextPlayerClient(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /sign in|not a bot|bot|captcha|login required|no playable formats|failed to find any playable|unavailable|private video|age-restricted|video unavailable|members only/i.test(
+    msg
+  );
+}
+
+export async function getYtdlVideoInfo(url: string): Promise<YtdlVideoInfo> {
+  const requestOptions = { headers: buildRequestHeaders() };
+  let lastError: unknown;
+
+  for (const playerClients of PLAYER_CLIENT_FALLBACKS) {
+    try {
+      return await ytdl.getInfo(url, { playerClients, requestOptions });
+    } catch (e) {
+      lastError = e;
+      if (!shouldRetryWithNextPlayerClient(e)) throw e;
+    }
+  }
+
+  for (const playerClients of PLAYER_CLIENT_FALLBACKS) {
+    try {
+      return await ytdl.getBasicInfo(url, { playerClients, requestOptions });
+    } catch (e) {
+      lastError = e;
+      if (!shouldRetryWithNextPlayerClient(e)) throw e;
+    }
+  }
+
+  throw lastError;
 }
 
 function formatDuration(seconds: number): string {
@@ -57,10 +113,7 @@ export async function getYoutubeInfo(url: string): Promise<{
     format_type: 'video+audio' | 'video-only' | 'audio-only';
   }>;
 }> {
-  const info = await ytdl.getInfo(url, {
-    ...INFO_OPTS,
-    requestOptions: { headers: buildRequestHeaders() },
-  });
+  const info = await getYtdlVideoInfo(url);
   const d = info.videoDetails;
   const formats = info.formats;
 

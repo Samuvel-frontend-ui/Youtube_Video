@@ -43,9 +43,10 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   const responseData = axiosError.response?.data as unknown;
   if (typeof responseData === 'string' && responseData.trim()) return responseData;
   if (responseData && typeof responseData === 'object') {
-    const dataObj = responseData as { error?: unknown; message?: unknown };
-    if (typeof dataObj.error === 'string' && dataObj.error.trim()) return dataObj.error;
-    if (typeof dataObj.message === 'string' && dataObj.message.trim()) return dataObj.message;
+    const dataObj = responseData as { error?: unknown; message?: unknown; hint?: unknown };
+    const hint = typeof dataObj.hint === 'string' && dataObj.hint.trim() ? ` ${dataObj.hint.trim()}` : '';
+    if (typeof dataObj.error === 'string' && dataObj.error.trim()) return `${dataObj.error.trim()}${hint}`;
+    if (typeof dataObj.message === 'string' && dataObj.message.trim()) return `${dataObj.message.trim()}${hint}`;
   }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
   if (axiosError.message) return axiosError.message;

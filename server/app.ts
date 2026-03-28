@@ -7,21 +7,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import ytdl from '@distube/ytdl-core';
-import { getYoutubeInfo, startYoutubeDownload } from './youtube-node.js';
-
-const YTDL_INFO_OPTS = {
-  playerClients: ['ANDROID', 'WEB'] as ('ANDROID' | 'WEB')[],
-  requestOptions: {
-    headers: {
-      'user-agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      referer: 'https://www.youtube.com/',
-      ...(process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE
-        ? { cookie: (process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '').trim() }
-        : {}),
-    },
-  },
-};
+import { getYoutubeInfo, getYtdlVideoInfo, isYoutubeCookieInlineConfigured, startYoutubeDownload } from './youtube-node.js';
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -207,7 +193,7 @@ export function createApp(): express.Express {
       env: NODE_ENV,
       youtubeEngine: 'ytdl-core',
       ytdlCoreVersion: ytdl.version,
-      hasYoutubeCookie: Boolean((process.env.YOUTUBE_COOKIE || process.env.YT_COOKIE || '').trim()),
+      hasYoutubeCookie: isYoutubeCookieInlineConfigured(),
       timestamp: new Date().toISOString(),
     });
   });
@@ -237,6 +223,14 @@ export function createApp(): express.Express {
     } catch (error) {
       const message = normalizeErrorMessage(error, 'Failed to fetch video info.');
       logErr('video-info failed:', message);
+      if (/sign in|not a bot|bot gate|no playable formats|failed to find any playable|login required|captcha/i.test(message)) {
+        return res.status(503).json({
+          error: message,
+          code: 'YOUTUBE_BOT_GATE',
+          hint:
+            'YouTube is limiting requests from this server. Try another video or time; for stubborn links set INLINE_YOUTUBE_COOKIE in server/youtube-node.ts (private fork only — never put a real Google cookie in a public GitHub repo).',
+        });
+      }
       return res.status(500).json({ error: message });
     }
   });
@@ -260,7 +254,7 @@ export function createApp(): express.Express {
         downloadProgress.set(requestId, { state: 'preparing', updatedAt: Date.now() });
       }
 
-      const info = await withRetry(() => ytdl.getInfo(url, YTDL_INFO_OPTS), 2);
+      const info = await withRetry(() => getYtdlVideoInfo(url), 2);
 
       let handle;
       try {

@@ -1,16 +1,24 @@
 import axios, { AxiosError } from 'axios';
 
 /**
- * Must match `frontend/.env.production`. Used when `VITE_API_URL` is missing or empty in production
- * (Vercel sometimes leaves env unset and then `POST /api/...` hits the static app → HTTP 405).
+ * Hardcoded API (no env). Change REMOTE_API_ORIGIN if you move the backend.
+ *
+ * Use `/api` only on localhost so Vite can proxy to uvicorn. On any real host (e.g. *.vercel.app)
+ * we must use the full Render URL — otherwise POST /api hits the static CDN → HTTP 405.
  */
-const PRODUCTION_API_ORIGIN = 'https://yt-backend-ys8d.onrender.com';
+const REMOTE_API_ORIGIN = 'https://yt-backend-ys8d.onrender.com';
+const REMOTE_API_BASE = `${REMOTE_API_ORIGIN.replace(/\/$/, '')}/api`;
 
-const fromEnv = String(import.meta.env.VITE_API_URL ?? '').trim();
-const resolvedOrigin =
-  fromEnv || (import.meta.env.PROD ? PRODUCTION_API_ORIGIN : '');
-const apiOrigin = resolvedOrigin.replace(/\/$/, '');
-const apiBase = apiOrigin ? `${apiOrigin}/api` : '/api';
+const apiBase: string = (() => {
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    if (h && h !== 'localhost' && h !== '127.0.0.1') {
+      return REMOTE_API_BASE;
+    }
+  }
+  if (import.meta.env.DEV) return '/api';
+  return REMOTE_API_BASE;
+})();
 
 export interface VideoFormat {
   format_id: string;
@@ -59,15 +67,14 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   }
   if (axiosError.response?.status === 405) {
     return (
-      'HTTP 405: the browser posted to this static site’s /api, not your Python API. ' +
-      'Set VITE_API_URL in Vercel (Environment Variables) or commit frontend/.env.production with your API origin, then redeploy.'
+      'HTTP 405: request hit the wrong host. Check REMOTE_API_ORIGIN in frontend/src/services/api.ts matches your API.'
     );
   }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
   if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNREFUSED')
-    return 'Cannot reach the API. Run the stack with npm run dev (starts Vite + Python API), or set VITE_API_URL to your deployed API URL.';
+    return 'Cannot reach the API. For local dev run the backend on port 8000 and use npm run dev; for production check REMOTE_API_ORIGIN in api.ts.';
   if (axiosError.code === 'ECONNRESET' || /ECONNRESET/i.test(String(axiosError.message)))
-    return 'Connection was reset while talking to the API. Retry the search, or restart dev servers (npm run dev) if the API restarted mid-request.';
+    return 'Connection was reset while talking to the API. Retry or wait if the API was cold-starting.';
   if (axiosError.message) return axiosError.message;
   return fallback;
 }

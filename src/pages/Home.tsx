@@ -109,13 +109,14 @@ export default function Home() {
       requestId,
     });
     trackEvent('quality_selected', { kind, formatId });
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      iframe.remove();
-    }, 60_000);
+    const opened = window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+    if (!opened || opened.closed) {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = downloadUrl;
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 60_000);
+    }
     trackEvent('download_started', { kind, formatId });
   };
 
@@ -126,27 +127,27 @@ export default function Home() {
   return (
     <div className="min-h-screen pt-28 md:pt-32 pb-20 px-4 md:px-6">
       <Helmet>
-        <title>VibeDown | YouTube & Shorts Video Downloader (MP3 + HD)</title>
+        <title>VibeDown | YouTube & Shorts — MP3 + HD, format-first</title>
         <meta
           name="description"
-          content="Use VibeDown to fetch video info and download YouTube videos or Shorts in MP3, 360p, 480p, 720p, and 1080p quality."
+          content="Paste YouTube or Shorts, read the real format list, download MP3 or merged video up to 1080p when the source allows — Vite frontend, Python + yt-dlp API."
         />
         <meta
           name="keywords"
-          content="youtube downloader, shorts downloader, mp3 download, hd video downloader, online video downloader"
+          content="vibedown, youtube downloader, shorts mp3, hd youtube download, format picker, yt-dlp"
         />
-        <meta property="og:title" content="VibeDown - YouTube & Shorts Video Downloader" />
+        <meta property="og:title" content="VibeDown — YouTube & Shorts, format-first" />
         <meta
           property="og:description"
-          content="Download YouTube videos and Shorts in multiple qualities and MP3 with a clean, fast web app."
+          content="No generic “best” guesswork — pick MP3 or video quality from what YouTube exposes, then download through your API."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={canonicalUrl} />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="VibeDown - YouTube & Shorts Downloader" />
+        <meta name="twitter:title" content="VibeDown — YouTube & Shorts" />
         <meta
           name="twitter:description"
-          content="Fetch video info instantly and download in MP3 or HD video quality."
+          content="Inspect formats, grab MP3 or HD — split-stack app you can self-host."
         />
         <link rel="canonical" href={canonicalUrl} />
         {pageSchemas.map((schema, i) => (
@@ -163,8 +164,8 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight leading-tight text-slate-900 dark:text-slate-50"
           >
-            Download <span className="glow-text">Anything</span> <br />
-            From Anywhere.
+            Pull the <span className="glow-text">vibe</span> — <br className="hidden sm:block" />
+            YouTube &amp; Shorts, your rules.
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
@@ -172,7 +173,7 @@ export default function Home() {
             transition={{ delay: 0.1 }}
             className="text-slate-600 dark:text-slate-300 text-lg md:text-xl max-w-2xl mx-auto"
           >
-            Fast YouTube and Shorts downloader with quality-first controls.
+            Paste a link, see the real format list, then save MP3 or merged HD — built as a sharp static UI plus a Python + yt-dlp API you deploy separately.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -187,7 +188,7 @@ export default function Home() {
               Shorts Supported
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-400/25">
-              One-Click Download
+              Split-stack (Vercel + API)
             </span>
           </motion.div>
         </div>

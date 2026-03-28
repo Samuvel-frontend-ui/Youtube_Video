@@ -32,7 +32,7 @@ export interface DownloadProgress {
 
 const api = axios.create({
   baseURL: apiBase,
-  timeout: 30000,
+  timeout: 120_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -49,6 +49,10 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     if (typeof dataObj.message === 'string' && dataObj.message.trim()) return `${dataObj.message.trim()}${hint}`;
   }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
+  if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNREFUSED')
+    return 'Cannot reach the API. Run the stack with npm run dev (starts Vite + Python API), or set VITE_API_URL to your deployed API URL.';
+  if (axiosError.code === 'ECONNRESET' || /ECONNRESET/i.test(String(axiosError.message)))
+    return 'Connection was reset while talking to the API. Retry the search, or restart dev servers (npm run dev) if the API restarted mid-request.';
   if (axiosError.message) return axiosError.message;
   return fallback;
 }

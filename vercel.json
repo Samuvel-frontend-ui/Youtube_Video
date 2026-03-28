@@ -6,17 +6,10 @@
   "installCommand": "npm install",
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
-  "functions": {
-    "api/*.ts": {
-      "maxDuration": 60,
-      "memory": 2048,
-      "includeFiles": "node_modules/ffmpeg-static/**"
-    }
-  },
   "headers": [
     {
       "source": "/assets/(.*)",

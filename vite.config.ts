@@ -1,17 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig} from 'vite';
 
-const backendTarget = process.env.VITE_BACKEND_URL || 'http://localhost:3001';
+/** Local Python API: `cd backend-python && pip install -r requirements.txt && uvicorn main:app --port 8000` */
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -25,8 +22,9 @@ export default defineConfig(({mode}) => {
         '/api': {
           target: backendTarget,
           changeOrigin: true,
-          timeout: 0,
-          proxyTimeout: 0,
+          /** video-info can take 15–60s; explicit ms avoids ECONNRESET with some http-proxy defaults */
+          timeout: 180_000,
+          proxyTimeout: 180_000,
         },
       },
     },

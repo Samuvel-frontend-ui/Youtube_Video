@@ -53,7 +53,7 @@ export default function SearchBox({ onSearch, isLoading, clearSignal = 0 }: Sear
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste YouTube link here..."
+            placeholder="Drop a youtube.com, youtu.be, or Shorts URL…"
             className="glass-input w-full pl-12 sm:pl-16 pr-12 sm:pr-32 text-base sm:text-lg min-h-[56px]"
           />
 

@@ -8,4 +8,9 @@ coverage/
 !.env.example
 .vercel
 
-.vercel
+# Local scratch / debug dumps
+.tmp*.json
+
+# Python
+__pycache__/
+*.py[cod]

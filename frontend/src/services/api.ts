@@ -48,6 +48,12 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     if (typeof dataObj.error === 'string' && dataObj.error.trim()) return `${dataObj.error.trim()}${hint}`;
     if (typeof dataObj.message === 'string' && dataObj.message.trim()) return `${dataObj.message.trim()}${hint}`;
   }
+  if (axiosError.response?.status === 405) {
+    return (
+      'HTTP 405: the browser posted to this static site’s /api, not your Python API. ' +
+      'Set VITE_API_URL in Vercel (Environment Variables) or commit frontend/.env.production with your API origin, then redeploy.'
+    );
+  }
   if (axiosError.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
   if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNREFUSED')
     return 'Cannot reach the API. Run the stack with npm run dev (starts Vite + Python API), or set VITE_API_URL to your deployed API URL.';

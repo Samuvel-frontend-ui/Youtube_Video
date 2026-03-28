@@ -32,26 +32,23 @@ Output: **`dist/`** (ignored by git).
 
 ## Deploy on Vercel
 
-1. Connect this repo (or a repo that contains only this folder as root).
-2. If the monorepo layout is used: set Vercel **Root Directory** to **`frontend`**.
-3. **Environment variables:** **`VITE_API_URL`** = your Render API origin with **no trailing slash**, e.g. `https://yt-backend-ys8d.onrender.com`.
-4. Redeploy after changing env vars.
+1. Connect this repo (monorepo: build from repo root per root `vercel.json`, or set **Root Directory** to **`frontend`** if you use a frontend-only repo).
+2. **No `VITE_API_URL` needed** — production API origin is hardcoded in **`src/services/api.ts`** (`REMOTE_API_ORIGIN`). Edit that constant if your API URL changes.
 
-## Environment (`.env`)
+## Environment (`.env`) — local dev only
 
-Copy **`.env.example`** → **`.env`**. Vite reads variables from this directory.
+Copy **`.env.example`** → **`.env`** for optional overrides while developing.
 
 | Variable | When |
 |----------|------|
-| `VITE_API_URL` | Production / preview: full API origin (no `/api` suffix). |
-| `VITE_BACKEND_URL` | Local dev if API is not on `127.0.0.1:8000`. |
-| `VITE_DEV_PORT` | Optional Vite port override. |
+| `VITE_BACKEND_URL` | Dev: proxy `/api` target if not `http://127.0.0.1:8000`. |
+| `VITE_DEV_PORT` | Optional Vite port. |
 
 ## Layout
 
 | Path | Role |
 |------|------|
 | `src/` | Components, pages, hooks |
-| `src/services/api.ts` | Axios → `VITE_API_URL` or `/api` |
+| `src/services/api.ts` | Axios: dev → `/api` proxy; prod → hardcoded Render origin + `/api` |
 | `vite.config.ts` | Dev proxy, plugins |
 | `vercel.json` | SPA rewrite + asset caching |

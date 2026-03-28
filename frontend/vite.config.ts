@@ -8,7 +8,7 @@ const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
 
 export default defineConfig(() => {
   return {
-    /** Always load `.env*` from this folder (fixes monorepo `npm run build -w` cwd). */
+    /** Load optional `.env` for dev (`VITE_BACKEND_URL`, etc.). */
     envDir: path.resolve(__dirname),
     plugins: [react(), tailwindcss()],
     resolve: {

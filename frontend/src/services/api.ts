@@ -1,6 +1,15 @@
 import axios, { AxiosError } from 'axios';
 
-const apiOrigin = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+/**
+ * Must match `frontend/.env.production`. Used when `VITE_API_URL` is missing or empty in production
+ * (Vercel sometimes leaves env unset and then `POST /api/...` hits the static app → HTTP 405).
+ */
+const PRODUCTION_API_ORIGIN = 'https://yt-backend-ys8d.onrender.com';
+
+const fromEnv = String(import.meta.env.VITE_API_URL ?? '').trim();
+const resolvedOrigin =
+  fromEnv || (import.meta.env.PROD ? PRODUCTION_API_ORIGIN : '');
+const apiOrigin = resolvedOrigin.replace(/\/$/, '');
 const apiBase = apiOrigin ? `${apiOrigin}/api` : '/api';
 
 export interface VideoFormat {

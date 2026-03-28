@@ -31,19 +31,21 @@ VIDEO_INFO_TTL = 180
 DOWNLOAD_PROGRESS: dict[str, dict[str, Any]] = {}
 DOWNLOAD_PROGRESS_TTL = 600
 
-
-def origins_list() -> list[str]:
-    raw = os.environ.get("FRONTEND_ORIGIN", "*").strip()
-    if raw == "*":
-        return ["*"]
-    return [o.strip() for o in raw.split(",") if o.strip()]
+# Browser origins allowed to call this API (no env — edit here if the frontend URL changes).
+ALLOWED_CORS_ORIGINS: tuple[str, ...] = (
+    "https://youtube-video-jade.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
 
 
 app = FastAPI(title="VibeDown API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins_list(),
-    allow_credentials=False if origins_list() == ["*"] else True,
+    allow_origins=list(ALLOWED_CORS_ORIGINS),
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

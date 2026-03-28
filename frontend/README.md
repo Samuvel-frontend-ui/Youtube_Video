@@ -34,7 +34,7 @@ Output: **`dist/`** (ignored by git).
 
 1. Connect this repo (or a repo that contains only this folder as root).
 2. If the monorepo layout is used: set Vercel **Root Directory** to **`frontend`**.
-3. **Environment variables:** **`VITE_API_URL`** = your Render API origin, e.g. `https://your-api.onrender.com` (no trailing slash).
+3. **Environment variables:** **`VITE_API_URL`** = your Render API origin with **no trailing slash**, e.g. `https://yt-backend-ys8d.onrender.com`.
 4. Redeploy after changing env vars.
 
 ## Environment (`.env`)

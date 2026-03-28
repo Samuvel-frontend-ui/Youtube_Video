@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Env (keep template)
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+
+# Tools
+.pytest_cache/
+.mypy_cache/
+
+# Scratch
+.tmp*.json
+
+# Vercel CLI (local link)
+.vercel

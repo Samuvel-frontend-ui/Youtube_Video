@@ -1,0 +1,2 @@
+# Hoisted deps when using npm workspaces from repo root (Vercel / local)
+node_modules/

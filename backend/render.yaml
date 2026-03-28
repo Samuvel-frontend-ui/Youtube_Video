@@ -1,0 +1,17 @@
+# Render Blueprint for this API folder (set Render Root Directory to `backend` if repo also has `frontend/`).
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: vibedown-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: YOUTUBE_COOKIE
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"

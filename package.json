@@ -1,0 +1,10 @@
+{
+  "name": "vibedown-monorepo",
+  "private": true,
+  "description": "Vercel builds the frontend workspace from the repo root (no Root Directory setting required).",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "build": "npm run build -w vibedown-frontend",
+    "vercel-build": "npm run build"
+  }
+}
